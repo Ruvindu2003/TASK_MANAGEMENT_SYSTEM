@@ -87,6 +87,63 @@ const statusHandler = (req: any, res: any) => {
 server.get('/', statusHandler);
 server.get('/api', statusHandler);
 
+// Live diagnostic endpoint
+const debugHandler = async (req: any, res: any) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  const result: any = {
+    timestamp: new Date().toISOString(),
+    nodeVersion: process.version,
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL: process.env.VERCEL,
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+    },
+  };
+
+  // Test 1: Direct Neon PostgreSQL connection
+  try {
+    // @ts-ignore
+    const { Client } = await import('pg');
+    const client = new Client({
+      connectionString: 'postgresql://neondb_owner:npg_o2s0pXJquckS@ep-odd-mode-b4excefk-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require',
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000,
+    });
+    await client.connect();
+    const r = await client.query('SELECT NOW() as db_time, 1 as test');
+    await client.end();
+    result.neonPg = { status: 'ok', queryResult: r.rows[0] };
+  } catch (err: any) {
+    result.neonPg = { status: 'error', message: err?.message, stack: err?.stack };
+  }
+
+  // Test 2: jwks-rsa / jose import
+  try {
+    // @ts-ignore
+    const jwks = await import('jwks-rsa');
+    result.jwks = { status: 'ok', type: typeof jwks.default };
+  } catch (err: any) {
+    result.jwks = { status: 'error', message: err?.message, stack: err?.stack };
+  }
+
+  // Test 3: NestJS bootstrap
+  try {
+    await Promise.race([
+      bootstrap(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Bootstrap timed out after 6000ms')), 6000),
+      ),
+    ]);
+    result.bootstrap = { status: 'ok' };
+  } catch (err: any) {
+    result.bootstrap = { status: 'error', message: err?.message, stack: err?.stack };
+  }
+
+  return res.json(result);
+};
+
+server.get('/api/debug', debugHandler);
+
 // Serverless handler for Vercel
 export default async function handler(req: any, res: any) {
   // Fast CORS preflight handling - respond immediately
@@ -102,6 +159,10 @@ export default async function handler(req: any, res: any) {
   const cleanUrl = (req.url || '').split('?')[0].replace(/\/+$/, '');
   if (cleanUrl === '' || cleanUrl === '/api') {
     return statusHandler(req, res);
+  }
+
+  if (cleanUrl === '/api/debug') {
+    return debugHandler(req, res);
   }
 
   try {

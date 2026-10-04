@@ -69,6 +69,52 @@ const statusHandler = (req, res) => {
 };
 server.get('/', statusHandler);
 server.get('/api', statusHandler);
+const debugHandler = async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const result = {
+        timestamp: new Date().toISOString(),
+        nodeVersion: process.version,
+        env: {
+            NODE_ENV: process.env.NODE_ENV,
+            VERCEL: process.env.VERCEL,
+            hasDatabaseUrl: !!process.env.DATABASE_URL,
+        },
+    };
+    try {
+        const { Client } = await import('pg');
+        const client = new Client({
+            connectionString: 'postgresql://neondb_owner:npg_o2s0pXJquckS@ep-odd-mode-b4excefk-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require',
+            ssl: { rejectUnauthorized: false },
+            connectionTimeoutMillis: 5000,
+        });
+        await client.connect();
+        const r = await client.query('SELECT NOW() as db_time, 1 as test');
+        await client.end();
+        result.neonPg = { status: 'ok', queryResult: r.rows[0] };
+    }
+    catch (err) {
+        result.neonPg = { status: 'error', message: err?.message, stack: err?.stack };
+    }
+    try {
+        const jwks = await import('jwks-rsa');
+        result.jwks = { status: 'ok', type: typeof jwks.default };
+    }
+    catch (err) {
+        result.jwks = { status: 'error', message: err?.message, stack: err?.stack };
+    }
+    try {
+        await Promise.race([
+            bootstrap(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Bootstrap timed out after 6000ms')), 6000)),
+        ]);
+        result.bootstrap = { status: 'ok' };
+    }
+    catch (err) {
+        result.bootstrap = { status: 'error', message: err?.message, stack: err?.stack };
+    }
+    return res.json(result);
+};
+server.get('/api/debug', debugHandler);
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
@@ -79,6 +125,9 @@ export default async function handler(req, res) {
     const cleanUrl = (req.url || '').split('?')[0].replace(/\/+$/, '');
     if (cleanUrl === '' || cleanUrl === '/api') {
         return statusHandler(req, res);
+    }
+    if (cleanUrl === '/api/debug') {
+        return debugHandler(req, res);
     }
     try {
         await bootstrap();
