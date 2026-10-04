@@ -217,9 +217,9 @@ export default function Home() {
                 <StatsOverview stats={stats} loading={statsLoading} />
 
                 {/* Split Section: Kanban Quick Preview & Recent Tasks */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  {/* Kanban Quick View (2 cols) */}
-                  <div className="lg:col-span-2 space-y-4">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                  {/* Kanban Quick View (2 cols on xl) */}
+                  <div className="xl:col-span-2 space-y-4 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Kanban className="w-5 h-5 text-blue-600" />
@@ -245,7 +245,7 @@ export default function Home() {
                   </div>
 
                   {/* Task Table Preview (1 col) */}
-                  <div className="space-y-4">
+                  <div className="space-y-4 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <ListTodo className="w-5 h-5 text-indigo-600" />

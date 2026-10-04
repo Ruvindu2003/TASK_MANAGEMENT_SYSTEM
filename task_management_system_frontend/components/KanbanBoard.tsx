@@ -60,14 +60,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onQuickAdd,
 }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
       {columns.map((col) => {
         const columnTasks = tasks.filter((t) => t.status === col.status);
 
         return (
           <div
             key={col.status}
-            className="bg-slate-50/70 rounded-3xl p-4 border border-slate-200/70 flex flex-col min-h-[500px]"
+            className="bg-slate-50/70 rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 border border-slate-200/70 flex flex-col min-h-[380px] min-w-0"
           >
             {/* Column Header */}
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200/60">
