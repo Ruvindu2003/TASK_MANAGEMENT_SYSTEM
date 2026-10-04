@@ -2,7 +2,8 @@ import axios from 'axios';
 import { auth } from './firebase';
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  process.env.NEXT_PUBLIC_API_URL ||
+  'https://task-management-system-pi-seven.vercel.app/api';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
