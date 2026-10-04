@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module.js';
@@ -55,20 +56,30 @@ const statusHandler = (req, res) => {
 };
 server.get('/', statusHandler);
 server.get('/api', statusHandler);
-server.use(async (req, res, next) => {
+export default async function handler(req, res) {
     try {
         await bootstrap();
-        next();
-    }
-    catch (err) {
-        Logger.error('Serverless bootstrap error:', err);
-        res.status(500).json({
-            error: 'Backend Initialization Error',
-            message: err?.message || 'Failed to initialize NestJS application',
-            hint: 'Please check your Vercel Environment Variables (DATABASE_URL) in Vercel Project Settings.',
+        return new Promise((resolve, reject) => {
+            res.on('finish', resolve);
+            res.on('close', resolve);
+            res.on('error', reject);
+            server(req, res, (err) => {
+                if (err)
+                    reject(err);
+            });
         });
     }
-});
+    catch (err) {
+        Logger.error('Serverless handler error:', err);
+        if (!res.headersSent) {
+            res.status(500).json({
+                error: 'Backend Initialization Error',
+                message: err?.message || 'Failed to initialize NestJS application',
+                hint: 'Please check your Vercel Environment Variables (DATABASE_URL) in Vercel Project Settings.',
+            });
+        }
+    }
+}
 if (!process.env.VERCEL) {
     bootstrap().then(() => {
         const port = process.env.PORT || 5000;
@@ -77,5 +88,4 @@ if (!process.env.VERCEL) {
         });
     });
 }
-export default server;
 //# sourceMappingURL=main.js.map

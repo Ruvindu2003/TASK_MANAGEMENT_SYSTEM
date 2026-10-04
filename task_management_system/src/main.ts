@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module.js';
@@ -73,20 +74,29 @@ const statusHandler = (req: any, res: any) => {
 server.get('/', statusHandler);
 server.get('/api', statusHandler);
 
-// Middleware to ensure NestJS is initialized before any request is processed
-server.use(async (req, res, next) => {
+// Serverless handler for Vercel
+export default async function handler(req: any, res: any) {
   try {
     await bootstrap();
-    next();
-  } catch (err: any) {
-    Logger.error('Serverless bootstrap error:', err);
-    res.status(500).json({
-      error: 'Backend Initialization Error',
-      message: err?.message || 'Failed to initialize NestJS application',
-      hint: 'Please check your Vercel Environment Variables (DATABASE_URL) in Vercel Project Settings.',
+    return new Promise<void>((resolve, reject) => {
+      res.on('finish', resolve);
+      res.on('close', resolve);
+      res.on('error', reject);
+      server(req, res, (err: any) => {
+        if (err) reject(err);
+      });
     });
+  } catch (err: any) {
+    Logger.error('Serverless handler error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Backend Initialization Error',
+        message: err?.message || 'Failed to initialize NestJS application',
+        hint: 'Please check your Vercel Environment Variables (DATABASE_URL) in Vercel Project Settings.',
+      });
+    }
   }
-});
+}
 
 // Standalone execution for local development
 if (!process.env.VERCEL) {
@@ -97,6 +107,3 @@ if (!process.env.VERCEL) {
     });
   });
 }
-
-// Export Express instance directly for Vercel
-export default server;

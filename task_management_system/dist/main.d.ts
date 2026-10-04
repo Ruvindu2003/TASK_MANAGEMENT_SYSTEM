@@ -1,2 +1,2 @@
-declare const server: import("express-serve-static-core").Express;
-export default server;
+import 'reflect-metadata';
+export default function handler(req: any, res: any): Promise<void>;
