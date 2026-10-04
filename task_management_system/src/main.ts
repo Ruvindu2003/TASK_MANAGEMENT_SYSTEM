@@ -39,6 +39,21 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
+  // Root endpoint for status check
+  server.get('/', (req, res) => {
+    res.json({
+      status: 'ok',
+      service: 'Task Management System API',
+      message: 'Backend is running successfully on Vercel.',
+      endpoints: {
+        tasks: '/api/tasks',
+        categories: '/api/categories',
+        auth: '/api/auth',
+        analytics: '/api/analytics',
+      },
+    });
+  });
+
   await app.init();
   isAppInitialized = true;
   return app;
@@ -55,8 +70,17 @@ if (!process.env.VERCEL) {
 
 // Serverless handler for Vercel
 export default async function handler(req: any, res: any) {
-  if (!isAppInitialized) {
-    await bootstrap();
+  try {
+    if (!isAppInitialized) {
+      await bootstrap();
+    }
+    server(req, res);
+  } catch (err: any) {
+    Logger.error('Serverless bootstrap error:', err);
+    res.status(500).json({
+      error: 'Backend Initialization Error',
+      message: err?.message || 'Failed to initialize NestJS application',
+      hint: 'Please check your Vercel Environment Variables (DATABASE_URL) in Vercel Project Settings.',
+    });
   }
-  server(req, res);
 }
