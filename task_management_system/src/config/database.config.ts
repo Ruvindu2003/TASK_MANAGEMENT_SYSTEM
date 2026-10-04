@@ -5,7 +5,7 @@ import { Task } from '../modules/tasks/entities/task.entity.js';
 import { Category } from '../modules/categories/entities/category.entity.js';
 
 const NEON_DB_URL =
-  'postgresql://neondb_owner:npg_o2s0pXJquckS@ep-odd-mode-b4excefk-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require';
+  'postgresql://neondb_owner:npg_o2s0pXJquckS@ep-odd-mode-b4excefk-pooler.c-6.us-east-2.aws.neon.tech/task_management_system?sslmode=require';
 
 export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOptions => {
   const databaseUrl =
