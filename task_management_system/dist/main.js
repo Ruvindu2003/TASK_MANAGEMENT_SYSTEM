@@ -7,13 +7,22 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import express from 'express';
 const server = express();
 let isAppInitialized = false;
+server.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
 async function bootstrap() {
     const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
     app.enableCors({
-        origin: true,
+        origin: '*',
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
     });
     app.setGlobalPrefix('api');
     app.useGlobalPipes(new ValidationPipe({
@@ -51,6 +60,12 @@ if (!process.env.VERCEL) {
     });
 }
 export default async function handler(req, res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
     try {
         if (!isAppInitialized) {
             await bootstrap();
