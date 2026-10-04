@@ -56,8 +56,8 @@ async function bootstrap() {
   isAppInitialized = true;
 }
 
-// Root endpoint for status check
-server.get('/', (req, res) => {
+// Root and /api endpoint for status check
+const statusHandler = (req: any, res: any) => {
   res.json({
     status: 'ok',
     service: 'Task Management System API',
@@ -69,7 +69,9 @@ server.get('/', (req, res) => {
       analytics: '/api/analytics',
     },
   });
-});
+};
+server.get('/', statusHandler);
+server.get('/api', statusHandler);
 
 // Middleware to ensure NestJS is initialized before any request is processed
 server.use(async (req, res, next) => {

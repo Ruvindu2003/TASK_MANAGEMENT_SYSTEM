@@ -40,7 +40,7 @@ async function bootstrap() {
     await app.init();
     isAppInitialized = true;
 }
-server.get('/', (req, res) => {
+const statusHandler = (req, res) => {
     res.json({
         status: 'ok',
         service: 'Task Management System API',
@@ -52,7 +52,9 @@ server.get('/', (req, res) => {
             analytics: '/api/analytics',
         },
     });
-});
+};
+server.get('/', statusHandler);
+server.get('/api', statusHandler);
 server.use(async (req, res, next) => {
     try {
         await bootstrap();
