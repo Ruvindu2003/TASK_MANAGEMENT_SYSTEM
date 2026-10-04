@@ -3,10 +3,14 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor.js';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import express from 'express';
+
+const server = express();
+let isAppInitialized = false;
 
 async function bootstrap() {
-  const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
 
   // Enable CORS for frontend
   app.enableCors({
@@ -35,9 +39,24 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  const port = process.env.PORT || 5000;
-  await app.listen(port);
-  logger.log(`Task Management API is running on: http://localhost:${port}/api`);
+  await app.init();
+  isAppInitialized = true;
+  return app;
 }
 
-bootstrap();
+// Standalone execution for local development or non-Vercel environments
+if (!process.env.VERCEL) {
+  bootstrap().then((app) => {
+    const port = process.env.PORT || 5000;
+    app.listen(port);
+    Logger.log(`Task Management API is running on: http://localhost:${port}/api`, 'Bootstrap');
+  });
+}
+
+// Serverless handler for Vercel
+export default async function handler(req: any, res: any) {
+  if (!isAppInitialized) {
+    await bootstrap();
+  }
+  server(req, res);
+}
