@@ -1,0 +1,8 @@
+{
+  "name": "task-management-system",
+  "compatibility_date": "2024-09-23",
+  "assets": {
+    "directory": "./task_management_system_frontend/out",
+    "not_found_handling": "single-page-application"
+  }
+}
