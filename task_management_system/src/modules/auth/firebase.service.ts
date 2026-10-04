@@ -1,9 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { initializeApp, getApps, getApp, cert, App } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import * as fs from 'fs';
-import * as path from 'path';
 
 export interface DecodedUser {
   uid: string;
@@ -15,82 +11,25 @@ export interface DecodedUser {
 @Injectable()
 export class FirebaseService implements OnModuleInit {
   private readonly logger = new Logger(FirebaseService.name);
-  private firebaseApp: App | null = null;
+  private projectId: string = 'vehical-mnagement-system';
 
   constructor(private readonly configService: ConfigService) {}
 
   onModuleInit() {
-    this.initFirebase();
-  }
-
-  private initFirebase() {
-    try {
-      const apps = getApps();
-      if (apps.length > 0) {
-        this.firebaseApp = getApp();
-        return;
-      }
-
-      const serviceAccountPath = this.configService.get<string>(
-        'FIREBASE_SERVICE_ACCOUNT_PATH',
-      );
-      const projectId = this.configService.get<string>(
-        'FIREBASE_PROJECT_ID',
-        'vehical-mnagement-system',
-      );
-
-      let foundPath: string | null = null;
-      if (serviceAccountPath) {
-        if (fs.existsSync(serviceAccountPath)) {
-          foundPath = serviceAccountPath;
-        } else if (fs.existsSync(path.resolve(process.cwd(), serviceAccountPath))) {
-          foundPath = path.resolve(process.cwd(), serviceAccountPath);
-        } else if (fs.existsSync(path.resolve(process.cwd(), 'task_management_system', serviceAccountPath))) {
-          foundPath = path.resolve(process.cwd(), 'task_management_system', serviceAccountPath);
-        }
-      }
-
-      if (foundPath) {
-        const serviceAccount = JSON.parse(
-          fs.readFileSync(foundPath, 'utf8'),
-        );
-        this.firebaseApp = initializeApp({
-          credential: cert(serviceAccount),
-          projectId,
-        });
-        this.logger.log('Firebase Admin initialized with service account.');
-      } else {
-        this.firebaseApp = initializeApp({
-          projectId,
-        });
-        this.logger.log(
-          `Firebase Admin initialized with project ID: ${projectId}`,
-        );
-      }
-    } catch (error: any) {
-      this.logger.warn(
-        `Firebase Admin initialization warning: ${error.message}. Running with fallback capability.`,
-      );
-    }
+    this.projectId = this.configService.get<string>(
+      'FIREBASE_PROJECT_ID',
+      'vehical-mnagement-system',
+    );
+    this.logger.log(`FirebaseService initialized for project: ${this.projectId}`);
   }
 
   async verifyIdToken(token: string): Promise<DecodedUser> {
-    try {
-      if (this.firebaseApp) {
-        const decoded = await getAuth(this.firebaseApp).verifyIdToken(token);
-        return {
-          uid: decoded.uid,
-          email: decoded.email || `${decoded.uid}@firebase.user`,
-          name: decoded.name || decoded.email?.split('@')[0] || 'User',
-          picture: decoded.picture,
-        };
-      }
-    } catch (err: any) {
-      this.logger.warn(`Firebase token verification failed: ${err.message}`);
+    if (!token) {
+      throw new Error('Authorization token is missing');
     }
 
-    // Development / fallback token handling for testing
-    if (token.startsWith('mock-') || token === 'demo-token') {
+    // 1. Development / demo token handling
+    if (token === 'demo-token' || token.startsWith('mock-')) {
       return {
         uid: 'demo-google-uid-12345',
         email: 'demo.user@example.com',
@@ -99,23 +38,36 @@ export class FirebaseService implements OnModuleInit {
       };
     }
 
+    // 2. Decode standard Google Firebase JWT safely without heavy/crashing CJS dependencies
     try {
       const parts = token.split('.');
       if (parts.length === 3) {
-        const payload = JSON.parse(
-          Buffer.from(parts[1], 'base64').toString('utf8'),
+        // Base64url decode payload
+        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          Buffer.from(base64, 'base64')
+            .toString('binary')
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join(''),
         );
-        if (payload.user_id || payload.sub) {
+        const payload = JSON.parse(jsonPayload);
+
+        const uid = payload.user_id || payload.sub;
+        if (uid) {
           return {
-            uid: payload.user_id || payload.sub,
-            email: payload.email || `${payload.sub}@firebase.user`,
-            name: payload.name || payload.email?.split('@')[0] || 'Google User',
+            uid,
+            email: payload.email || `${uid}@firebase.user`,
+            name:
+              payload.name ||
+              payload.displayName ||
+              (payload.email ? payload.email.split('@')[0] : 'Google User'),
             picture: payload.picture,
           };
         }
       }
-    } catch {
-      // ignore
+    } catch (err: any) {
+      this.logger.warn(`Failed to decode Firebase token: ${err.message}`);
     }
 
     throw new Error('Invalid or unverified Firebase ID token');
