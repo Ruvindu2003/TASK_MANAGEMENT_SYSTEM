@@ -22,6 +22,10 @@ server.use((req, res, next) => {
     if (req.body !== undefined && req.body !== null) {
         return next();
     }
+    if (req.readableEnded || req._readableState?.ended) {
+        req.body = req.body || {};
+        return next();
+    }
     express.json()(req, res, (err) => {
         if (err)
             return next(err);
@@ -94,12 +98,48 @@ export default async function handler(req, res) {
     try {
         await bootstrap();
         return new Promise((resolve, reject) => {
-            res.on('finish', resolve);
-            res.on('close', resolve);
-            res.on('error', reject);
-            server(req, res, (err) => {
-                if (err)
+            let isDone = false;
+            const done = () => {
+                if (!isDone) {
+                    isDone = true;
+                    resolve();
+                }
+            };
+            res.once('finish', done);
+            res.once('close', done);
+            res.once('error', (err) => {
+                if (!isDone) {
+                    isDone = true;
                     reject(err);
+                }
+            });
+            const timeout = setTimeout(() => {
+                if (!isDone && !res.headersSent) {
+                    isDone = true;
+                    res.status(504).json({
+                        error: 'Gateway Timeout',
+                        message: 'Request exceeded maximum processing time on serverless backend',
+                    });
+                    resolve();
+                }
+            }, 8500);
+            res.once('finish', () => clearTimeout(timeout));
+            res.once('close', () => clearTimeout(timeout));
+            server(req, res, (err) => {
+                clearTimeout(timeout);
+                if (err) {
+                    if (!isDone) {
+                        isDone = true;
+                        reject(err);
+                    }
+                }
+                else if (!res.headersSent && !isDone) {
+                    res.status(404).json({
+                        error: 'Not Found',
+                        message: `Route ${req.method} ${req.url} was not found`,
+                    });
+                    done();
+                }
             });
         });
     }

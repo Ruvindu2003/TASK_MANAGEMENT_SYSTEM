@@ -22,9 +22,13 @@ server.use((req, res, next) => {
   next();
 });
 
-// Safe body parsing that never hangs on Vercel pre-parsed streams
+// Safe body parsing that never hangs on Vercel pre-parsed or ended streams
 server.use((req: any, res: any, next: any) => {
   if (req.body !== undefined && req.body !== null) {
+    return next();
+  }
+  if (req.readableEnded || req._readableState?.ended) {
+    req.body = req.body || {};
     return next();
   }
   express.json()(req, res, (err) => {
@@ -119,11 +123,52 @@ export default async function handler(req: any, res: any) {
   try {
     await bootstrap();
     return new Promise<void>((resolve, reject) => {
-      res.on('finish', resolve);
-      res.on('close', resolve);
-      res.on('error', reject);
+      let isDone = false;
+      const done = () => {
+        if (!isDone) {
+          isDone = true;
+          resolve();
+        }
+      };
+
+      res.once('finish', done);
+      res.once('close', done);
+      res.once('error', (err: any) => {
+        if (!isDone) {
+          isDone = true;
+          reject(err);
+        }
+      });
+
+      // Safety timeout: resolve if express doesn't finish within 8.5 seconds
+      const timeout = setTimeout(() => {
+        if (!isDone && !res.headersSent) {
+          isDone = true;
+          res.status(504).json({
+            error: 'Gateway Timeout',
+            message: 'Request exceeded maximum processing time on serverless backend',
+          });
+          resolve();
+        }
+      }, 8500);
+
+      res.once('finish', () => clearTimeout(timeout));
+      res.once('close', () => clearTimeout(timeout));
+
       server(req, res, (err: any) => {
-        if (err) reject(err);
+        clearTimeout(timeout);
+        if (err) {
+          if (!isDone) {
+            isDone = true;
+            reject(err);
+          }
+        } else if (!res.headersSent && !isDone) {
+          res.status(404).json({
+            error: 'Not Found',
+            message: `Route ${req.method} ${req.url} was not found`,
+          });
+          done();
+        }
       });
     });
   } catch (err: any) {

@@ -19,12 +19,14 @@ export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOp
     type: 'postgres',
     entities: [User, Task, Category],
     synchronize: false,
-    logging: configService.get<string>('NODE_ENV') === 'development',
+    logging: false,
     ssl: isProduction ? { rejectUnauthorized: false } : false,
     extra: isProduction
       ? {
           ssl: { rejectUnauthorized: false },
-          connectionTimeoutMillis: 10000,
+          connectionTimeoutMillis: 5000,
+          max: 1, // Single connection for serverless function cold start
+          idleTimeoutMillis: 2000,
         }
       : undefined,
   };

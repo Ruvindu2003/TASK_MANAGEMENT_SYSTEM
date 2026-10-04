@@ -11,12 +11,14 @@ export const getDatabaseConfig = (configService) => {
         type: 'postgres',
         entities: [User, Task, Category],
         synchronize: false,
-        logging: configService.get('NODE_ENV') === 'development',
+        logging: false,
         ssl: isProduction ? { rejectUnauthorized: false } : false,
         extra: isProduction
             ? {
                 ssl: { rejectUnauthorized: false },
-                connectionTimeoutMillis: 10000,
+                connectionTimeoutMillis: 5000,
+                max: 1,
+                idleTimeoutMillis: 2000,
             }
             : undefined,
     };
