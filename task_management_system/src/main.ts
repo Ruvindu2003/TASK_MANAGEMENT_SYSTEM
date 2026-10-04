@@ -76,6 +76,15 @@ server.get('/api', statusHandler);
 
 // Serverless handler for Vercel
 export default async function handler(req: any, res: any) {
+  // Fast health check response for / and /api without waiting for cold start bootstrap
+  const cleanUrl = (req.url || '').split('?')[0].replace(/\/+$/, '');
+  if (cleanUrl === '' || cleanUrl === '/api') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+    return statusHandler(req, res);
+  }
+
   try {
     await bootstrap();
     return new Promise<void>((resolve, reject) => {

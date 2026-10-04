@@ -18,7 +18,9 @@ export const getDatabaseConfig = (configService: ConfigService): TypeOrmModuleOp
   const baseConfig: TypeOrmModuleOptions = {
     type: 'postgres',
     entities: [User, Task, Category],
-    synchronize: configService.get<string>('DB_SYNCHRONIZE', 'true') === 'true',
+    synchronize: process.env.VERCEL
+      ? false
+      : configService.get<string>('DB_SYNCHRONIZE', 'true') === 'true',
     logging: configService.get<string>('NODE_ENV') === 'development',
     ssl: isProduction ? { rejectUnauthorized: false } : false,
     extra: isProduction ? { ssl: { rejectUnauthorized: false } } : undefined,
