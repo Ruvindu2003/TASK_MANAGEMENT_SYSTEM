@@ -22,6 +22,17 @@ server.use((req, res, next) => {
   next();
 });
 
+// Safe body parsing that never hangs on Vercel pre-parsed streams
+server.use((req: any, res: any, next: any) => {
+  if (req.body !== undefined && req.body !== null) {
+    return next();
+  }
+  express.json()(req, res, (err) => {
+    if (err) return next(err);
+    express.urlencoded({ extended: true })(req, res, next);
+  });
+});
+
 async function bootstrap() {
   if (isAppInitialized) return;
 
@@ -29,6 +40,7 @@ async function bootstrap() {
     bootstrapPromise = (async () => {
       try {
         const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+          bodyParser: false, // Prevents hanging on Vercel serverless request streams
           logger: ['error', 'warn', 'log'],
         });
 

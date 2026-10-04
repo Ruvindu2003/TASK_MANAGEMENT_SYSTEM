@@ -18,6 +18,16 @@ server.use((req, res, next) => {
     }
     next();
 });
+server.use((req, res, next) => {
+    if (req.body !== undefined && req.body !== null) {
+        return next();
+    }
+    express.json()(req, res, (err) => {
+        if (err)
+            return next(err);
+        express.urlencoded({ extended: true })(req, res, next);
+    });
+});
 async function bootstrap() {
     if (isAppInitialized)
         return;
@@ -25,6 +35,7 @@ async function bootstrap() {
         bootstrapPromise = (async () => {
             try {
                 const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+                    bodyParser: false,
                     logger: ['error', 'warn', 'log'],
                 });
                 app.enableCors({
