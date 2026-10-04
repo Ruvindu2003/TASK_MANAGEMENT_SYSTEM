@@ -10,9 +10,7 @@ export const getDatabaseConfig = (configService) => {
     const baseConfig = {
         type: 'postgres',
         entities: [User, Task, Category],
-        synchronize: process.env.VERCEL
-            ? false
-            : configService.get('DB_SYNCHRONIZE', 'true') === 'true',
+        synchronize: false,
         logging: configService.get('NODE_ENV') === 'development',
         ssl: isProduction ? { rejectUnauthorized: false } : false,
         extra: isProduction
