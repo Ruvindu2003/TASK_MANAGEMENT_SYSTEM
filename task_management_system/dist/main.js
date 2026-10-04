@@ -17,6 +17,8 @@ server.use((req, res, next) => {
     next();
 });
 async function bootstrap() {
+    if (isAppInitialized)
+        return;
     const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
     app.enableCors({
         origin: '*',
@@ -35,42 +37,26 @@ async function bootstrap() {
     }));
     app.useGlobalFilters(new AllExceptionsFilter());
     app.useGlobalInterceptors(new TransformInterceptor());
-    server.get('/', (req, res) => {
-        res.json({
-            status: 'ok',
-            service: 'Task Management System API',
-            message: 'Backend is running successfully on Vercel.',
-            endpoints: {
-                tasks: '/api/tasks',
-                categories: '/api/categories',
-                auth: '/api/auth',
-                analytics: '/api/analytics',
-            },
-        });
-    });
     await app.init();
     isAppInitialized = true;
-    return app;
 }
-if (!process.env.VERCEL) {
-    bootstrap().then((app) => {
-        const port = process.env.PORT || 5000;
-        app.listen(port);
-        Logger.log(`Task Management API is running on: http://localhost:${port}/api`, 'Bootstrap');
+server.get('/', (req, res) => {
+    res.json({
+        status: 'ok',
+        service: 'Task Management System API',
+        message: 'Backend is running successfully on Vercel.',
+        endpoints: {
+            tasks: '/api/tasks',
+            categories: '/api/categories',
+            auth: '/api/auth',
+            analytics: '/api/analytics',
+        },
     });
-}
-export default async function handler(req, res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+});
+server.use(async (req, res, next) => {
     try {
-        if (!isAppInitialized) {
-            await bootstrap();
-        }
-        server(req, res);
+        await bootstrap();
+        next();
     }
     catch (err) {
         Logger.error('Serverless bootstrap error:', err);
@@ -80,5 +66,14 @@ export default async function handler(req, res) {
             hint: 'Please check your Vercel Environment Variables (DATABASE_URL) in Vercel Project Settings.',
         });
     }
+});
+if (!process.env.VERCEL) {
+    bootstrap().then(() => {
+        const port = process.env.PORT || 5000;
+        server.listen(port, () => {
+            Logger.log(`Task Management API is running on: http://localhost:${port}/api`, 'Bootstrap');
+        });
+    });
 }
+export default server;
 //# sourceMappingURL=main.js.map
