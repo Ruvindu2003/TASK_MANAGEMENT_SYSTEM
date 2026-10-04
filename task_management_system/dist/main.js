@@ -8,6 +8,7 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import express from 'express';
 const server = express();
 let isAppInitialized = false;
+let bootstrapPromise = null;
 server.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
@@ -20,26 +21,38 @@ server.use((req, res, next) => {
 async function bootstrap() {
     if (isAppInitialized)
         return;
-    const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
-    app.enableCors({
-        origin: '*',
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
-    });
-    app.setGlobalPrefix('api');
-    app.useGlobalPipes(new ValidationPipe({
-        whitelist: true,
-        transform: true,
-        forbidNonWhitelisted: true,
-        transformOptions: {
-            enableImplicitConversion: true,
-        },
-    }));
-    app.useGlobalFilters(new AllExceptionsFilter());
-    app.useGlobalInterceptors(new TransformInterceptor());
-    await app.init();
-    isAppInitialized = true;
+    if (!bootstrapPromise) {
+        bootstrapPromise = (async () => {
+            try {
+                const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+                    logger: ['error', 'warn', 'log'],
+                });
+                app.enableCors({
+                    origin: '*',
+                    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+                    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+                });
+                app.setGlobalPrefix('api');
+                app.useGlobalPipes(new ValidationPipe({
+                    whitelist: true,
+                    transform: true,
+                    forbidNonWhitelisted: true,
+                    transformOptions: {
+                        enableImplicitConversion: true,
+                    },
+                }));
+                app.useGlobalFilters(new AllExceptionsFilter());
+                app.useGlobalInterceptors(new TransformInterceptor());
+                await app.init();
+                isAppInitialized = true;
+            }
+            catch (err) {
+                bootstrapPromise = null;
+                throw err;
+            }
+        })();
+    }
+    return bootstrapPromise;
 }
 const statusHandler = (req, res) => {
     res.json({
@@ -57,11 +70,14 @@ const statusHandler = (req, res) => {
 server.get('/', statusHandler);
 server.get('/api', statusHandler);
 export default async function handler(req, res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
     const cleanUrl = (req.url || '').split('?')[0].replace(/\/+$/, '');
     if (cleanUrl === '' || cleanUrl === '/api') {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
         return statusHandler(req, res);
     }
     try {
@@ -82,7 +98,7 @@ export default async function handler(req, res) {
             res.status(500).json({
                 error: 'Backend Initialization Error',
                 message: err?.message || 'Failed to initialize NestJS application',
-                hint: 'Please check your Vercel Environment Variables (DATABASE_URL) in Vercel Project Settings.',
+                hint: 'Please check your Neon database connectivity and configuration.',
             });
         }
     }

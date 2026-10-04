@@ -9,6 +9,7 @@ import express from 'express';
 
 const server = express();
 let isAppInitialized = false;
+let bootstrapPromise: Promise<void> | null = null;
 
 // Global top-level CORS middleware
 server.use((req, res, next) => {
@@ -24,37 +25,49 @@ server.use((req, res, next) => {
 async function bootstrap() {
   if (isAppInitialized) return;
 
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+  if (!bootstrapPromise) {
+    bootstrapPromise = (async () => {
+      try {
+        const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+          logger: ['error', 'warn', 'log'],
+        });
 
-  // Enable CORS for frontend
-  app.enableCors({
-    origin: '*',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
-  });
+        // Enable CORS for frontend
+        app.enableCors({
+          origin: '*',
+          methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+          allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+        });
 
-  // Global prefix
-  app.setGlobalPrefix('api');
+        // Global prefix
+        app.setGlobalPrefix('api');
 
-  // Global validation pipe
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-    }),
-  );
+        // Global validation pipe
+        app.useGlobalPipes(
+          new ValidationPipe({
+            whitelist: true,
+            transform: true,
+            forbidNonWhitelisted: true,
+            transformOptions: {
+              enableImplicitConversion: true,
+            },
+          }),
+        );
 
-  // Global exception filter and response interceptor
-  app.useGlobalFilters(new AllExceptionsFilter());
-  app.useGlobalInterceptors(new TransformInterceptor());
+        // Global exception filter and response interceptor
+        app.useGlobalFilters(new AllExceptionsFilter());
+        app.useGlobalInterceptors(new TransformInterceptor());
 
-  await app.init();
-  isAppInitialized = true;
+        await app.init();
+        isAppInitialized = true;
+      } catch (err) {
+        bootstrapPromise = null;
+        throw err;
+      }
+    })();
+  }
+
+  return bootstrapPromise;
 }
 
 // Root and /api endpoint for status check
@@ -76,12 +89,18 @@ server.get('/api', statusHandler);
 
 // Serverless handler for Vercel
 export default async function handler(req: any, res: any) {
+  // Fast CORS preflight handling - respond immediately
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // Fast health check response for / and /api without waiting for cold start bootstrap
   const cleanUrl = (req.url || '').split('?')[0].replace(/\/+$/, '');
   if (cleanUrl === '' || cleanUrl === '/api') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
     return statusHandler(req, res);
   }
 
@@ -101,7 +120,7 @@ export default async function handler(req: any, res: any) {
       res.status(500).json({
         error: 'Backend Initialization Error',
         message: err?.message || 'Failed to initialize NestJS application',
-        hint: 'Please check your Vercel Environment Variables (DATABASE_URL) in Vercel Project Settings.',
+        hint: 'Please check your Neon database connectivity and configuration.',
       });
     }
   }

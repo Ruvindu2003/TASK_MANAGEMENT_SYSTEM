@@ -1,7 +1,7 @@
 import { User } from '../modules/users/entities/user.entity.js';
 import { Task } from '../modules/tasks/entities/task.entity.js';
 import { Category } from '../modules/categories/entities/category.entity.js';
-const NEON_DB_URL = 'postgresql://neondb_owner:npg_o2s0pXJquckS@ep-odd-mode-b4excefk-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const NEON_DB_URL = 'postgresql://neondb_owner:npg_o2s0pXJquckS@ep-odd-mode-b4excefk-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require';
 export const getDatabaseConfig = (configService) => {
     const databaseUrl = configService.get('DATABASE_URL') ||
         process.env.DATABASE_URL ||
@@ -15,7 +15,12 @@ export const getDatabaseConfig = (configService) => {
             : configService.get('DB_SYNCHRONIZE', 'true') === 'true',
         logging: configService.get('NODE_ENV') === 'development',
         ssl: isProduction ? { rejectUnauthorized: false } : false,
-        extra: isProduction ? { ssl: { rejectUnauthorized: false } } : undefined,
+        extra: isProduction
+            ? {
+                ssl: { rejectUnauthorized: false },
+                connectionTimeoutMillis: 10000,
+            }
+            : undefined,
     };
     if (databaseUrl) {
         return {
