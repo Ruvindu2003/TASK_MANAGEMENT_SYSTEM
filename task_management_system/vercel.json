@@ -1,10 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "dist/main.js": {
-      "maxDuration": 60
-    }
-  },
   "builds": [
     {
       "src": "dist/main.js",
