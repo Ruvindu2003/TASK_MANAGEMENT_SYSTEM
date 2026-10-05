@@ -6,6 +6,7 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor.js';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import express from 'express';
+import { NEON_DB_URL } from './config/database.config.js';
 const server = express();
 let isAppInitialized = false;
 let bootstrapPromise = null;
@@ -70,10 +71,19 @@ async function bootstrap() {
     return bootstrapPromise;
 }
 const statusHandler = (req, res) => {
+    const rawDbUrl = process.env.DATABASE_URL || NEON_DB_URL;
+    const maskedUrl = rawDbUrl ? rawDbUrl.replace(/:[^:@]+@/, ':***@') : 'NONE';
     res.json({
         status: 'ok',
         service: 'Task Management System API',
         message: 'Backend is running successfully on Vercel.',
+        env: {
+            hasEnvDbUrl: !!process.env.DATABASE_URL,
+            effectiveDbUrl: maskedUrl,
+            nodeEnv: process.env.NODE_ENV,
+            vercel: process.env.VERCEL,
+            vercelRegion: process.env.VERCEL_REGION,
+        },
         endpoints: {
             tasks: '/api/tasks',
             categories: '/api/categories',
@@ -94,6 +104,33 @@ export default async function handler(req, res) {
     const cleanUrl = (req.url || '').split('?')[0].replace(/\/+$/, '');
     if (cleanUrl === '' || cleanUrl === '/api') {
         return statusHandler(req, res);
+    }
+    if (cleanUrl === '/api/db-test') {
+        const t0 = Date.now();
+        try {
+            const rawDbUrl = process.env.DATABASE_URL || NEON_DB_URL;
+            const { default: pg } = await import('pg');
+            const client = new pg.Client({
+                connectionString: rawDbUrl,
+                ssl: { rejectUnauthorized: false },
+                connectionTimeoutMillis: 5000,
+            });
+            await client.connect();
+            const resQuery = await client.query('SELECT current_database(), now()');
+            await client.end();
+            return res.json({
+                success: true,
+                durationMs: Date.now() - t0,
+                result: resQuery.rows[0],
+            });
+        }
+        catch (err) {
+            return res.status(500).json({
+                success: false,
+                durationMs: Date.now() - t0,
+                error: err.message,
+            });
+        }
     }
     try {
         await bootstrap();
